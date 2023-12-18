@@ -1,96 +1,239 @@
-// index.js
 const express = require('express');
+const mongoose = require('mongoose');
 const app = express();
 
 // Body parser middleware
 app.use(express.json());
 
+// MongoDB connection setup
+mongoose.connect('mongodb://localhost:27017/ugmc-emr', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
 // Routes
-// ...
+const patientsRoutes = require('./routes/patients');
+app.use('/api/patients', patientsRoutes); 
+app.get('/', (req, res) => {
+  res.send('Server is up and running!');
+});
+
+
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something went wrong!');
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-// Inside your index.js
 
-// Require necessary modules
+
+
 const Patient = require('./patientModel');
 
-// Endpoint for registering patients
+const express = require('express');
+const app = express();
+const mongoose = require('mongoose');
+const { Patient } = require('./models');
+const faker = require('faker');
+
+
+app.use(express.json());
+
+mongoose.connect('mongodb://localhost:27017/ugmc-emr', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.log(err));
+
 app.post('/api/patients/register', async (req, res) => {
   try {
-    // Create a new patient in the database using the Patient model
-    // Retrieve data from req.body
-    // Save the patient data
-    // Respond with success message or patient details
+   
+    const randomPatient = {
+      patientId: faker.random.uuid(),
+      surname: faker.name.lastName(),
+      otherNames: faker.name.firstName(),
+      gender: faker.random.arrayElement(['Male', 'Female']),
+      phoneNumber: faker.phone.phoneNumber(),
+      residentialAddress: faker.address.streetAddress(),
+      emergencyContact: {
+        name: faker.name.findName(),
+        phone: faker.phone.phoneNumber(),
+        relationship: faker.random.arrayElement(['Family', 'Friend'])
+      }
+    };
+
+  
+    const newPatient = new Patient(randomPatient);
+
+
+    const savedPatient = await newPatient.save();
+
+    
+    res.status(201).json({ message: 'Patient registered successfully', patient: savedPatient });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Patient model (in a separate file, e.g., patientModel.js)
-const mongoose = require('mongoose');
-
-const patientSchema = new mongoose.Schema({
-  // Define schema fields based on requirements
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
+
+
+
+const encounterSchema = new mongoose.Schema({
+  patientId: { type: String, required: true },
+  dateAndTime: { type: Date, default: Date.now },
+  type: { type: String, enum: ['Emergency', 'OPD', 'Specialist Care'], required: true }
+});
+
+const vitalsSchema = new mongoose.Schema({
+  patientId: { type: String, required: true },
+  bloodPressure: { type: String, required: true },
+  temperature: { type: String, required: true },
+  pulse: { type: String, required: true },
+  spO2: { type: String, required: true }
+});
+
+const Patient = mongoose.model('Patient', patientSchema);
+const Encounter = mongoose.model('Encounter', encounterSchema);
+const Vitals = mongoose.model('Vitals', vitalsSchema);
+
+module.exports = { Patient, Encounter, Vitals };
 
 module.exports = mongoose.model('Patient', patientSchema);
 
-// Inside your index.js
 
-// Require necessary modules
-const Patient = require('./patientModel');
+const express = require('express');
+const app = express();
+const mongoose = require('mongoose');
+const { Patient } = require('./models'); 
 
-// Endpoint for registering patients
+app.use(express.json());
+
+
+mongoose.connect('mongodb://localhost:27017/ugmc-emr', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.log(err));
+
 app.post('/api/patients/register', async (req, res) => {
   try {
-    // Create a new patient in the database using the Patient model
-    // Retrieve data from req.body
-    // Save the patient data
-    // Respond with success message or patient details
+    const {
+      patientId,
+      surname,
+      otherNames,
+      gender,
+      phoneNumber,
+      residentialAddress,
+      emergencyContact
+    } = req.body;
+
+    const newPatient = new Patient({
+      patientId,
+      surname,
+      otherNames,
+      gender,
+      phoneNumber,
+      residentialAddress,
+      emergencyContact
+    });
+
+    const savedPatient = await newPatient.save();
+
+ 
+    res.status(201).json(savedPatient); 
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
 
-// Endpoint for starting an encounter
+
+
+aconst { Patient, Encounter } = require('./patientModel'); // Assuming patientModel.js defines the Patient and Encounter models
+
 app.post('/api/patients/:patientId/encounter', async (req, res) => {
-    try {
-      // Find the patient by ID
-      // Create and save encounter details for the patient
-      // Respond with success message or encounter details
-    } catch (err) {
-      res.status(500).json({ message: err.message });
+  try {
+    const patientId = req.params.patientId;
+    
+    // Find the patient by ID
+    const patient = await Patient.findOne({ patientId });
+
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found' });
     }
-  });
-  
-  // Endpoint for submitting patient vitals
+
+   
+    const { dateAndTime, type } = req.body;
+
+   
+    const encounter = new Encounter({
+      patientId,
+      dateAndTime,
+      type
+    });
+
+    const savedEncounter = await encounter.save();
+
+    
+    res.status(201).json(savedEncounter); 
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+const { Patient, Vitals } = require('./patientModel');
+
 app.post('/api/patients/:patientId/vitals', async (req, res) => {
-    try {
-      // Find the patient by ID
-      // Save vitals information for the patient
-      // Respond with success message or vitals details
-    } catch (err) {
-      res.status(500).json({ message: err.message });
+  try {
+    const patientId = req.params.patientId;
+    const patient = await Patient.findOne({ patientId });
+
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found' });
     }
-  });
+
+    const { bloodPressure, temperature, pulse, spO2 } = req.body;
+    const vitals = new Vitals({
+      patientId,
+      bloodPressure,
+      temperature,
+      pulse,
+      spO2
+    });
+
+    const savedVitals = await vitals.save();
+    res.status(201).json(savedVitals);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
   
 
-  // Endpoint for viewing a list of patients
 app.get('/api/patients', async (req, res) => {
     try {
-      // Fetch and return a list of patients
     } catch (err) {
       res.status(500).json({ message: err.message });
     }
   });
   
 
-  // Endpoint for viewing details of a specific patient
 app.get('/api/patients/:patientId', async (req, res) => {
     try {
       // Find and return details of the specified patient
